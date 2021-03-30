@@ -7,10 +7,10 @@ uint16_t sensorValues[SensorCount];
 //定义：右电机代号1，左电机代号2
 int Y = 1;
 int Z = 2;
-int t = 1900; //制动时间(ms)
+int t = 10; //制动时间(ms)
 int max_speed = 60; //最大速度
-int yz_IR = 2000; //红外感光器阈值
-int jiancha = 50; //系统自检时间
+int yz_IR = 1200; //红外感光器阈值
+int jiancha = 10; //系统自检时间
 float d = max_speed / (t / jiancha); //每次速度变化幅度
 float yz_gm = 50; //光敏电阻触发阈值（电压）
 int pin_gm = A0; //光敏接口针脚
@@ -21,6 +21,8 @@ int zt_z1 = 0;
 int zt_y1 = 0;
 int zt_y2 = 0;
 int w_r_speed;
+int qibu_t = 10;
+int qibu_v = 254;
 //自定义函数
 int zt_change(float v_gm, float yz_gm, int zt) {
   if (v_gm >= yz_gm) { //没有额外照明（电阻大，电压高）
@@ -52,24 +54,25 @@ void setup() {
 }
 
 void loop() {
-  float gm = analogRead(pin_gm); //读取光敏针脚
-  Serial.print(gm);
-  Serial.print('\t');
-  Serial.println();
-  if (gm >= yz_gm) { //没有额外照明（电阻大，电压高）
-    zt = zt;
-  }
-  else if (gm<yz_gm and ini_gm>yz_gm) { //有额外照明(gm<yz_gm)（电阻小，电压低）
-    if (zt = 0) {
-      return 1;
-    } else {
-      return 0;
-    }
-  }
-  ini_gm = gm;
+  //  float gm = analogRead(pin_gm); //读取光敏针脚
+  //  Serial.print(gm);
+  //  Serial.print('\t');
+  //  Serial.println();
+  //  if (gm >= yz_gm) { //没有额外照明（电阻大，电压高）
+  //    zt = zt;
+  //  }
+  //  else if (gm<yz_gm and ini_gm>yz_gm) { //有额外照明(gm<yz_gm)（电阻小，电压低）
+  //    if (zt = 0) {
+  //      return 1;
+  //    } else {
+  //      return 0;
+  //    }
+  //  }
+  //  ini_gm = gm;
+  zt = 1;
   switch (zt) {
     case (0): //不动
-      delay(t);
+      delay(jiancha);
       break;
     case 1://动
       qtr.read(sensorValues);
@@ -111,10 +114,18 @@ void loop() {
       //检测传感器状态,左2（），左1（），右1（），右2（）
       if (zt_z2 == 0 and zt_z1 == 0 and zt_y1 == 0 and zt_y2 == 0) {
         //左2（0），左1（0），右1（0），右2（0）→前进
+        //        digitalWrite(4, LOW);
+        //        analogWrite(5, qibu_v);
+        //        analogWrite(6, qibu_v);
+        //        digitalWrite(7, HIGH);
+        //        delay(qibu_t);
         digitalWrite(4, LOW);
         analogWrite(5, max_speed);
         analogWrite(6, max_speed);
         digitalWrite(7, HIGH);
+        Serial.print("前进");
+        Serial.print('\t');
+        Serial.println();
         delay(jiancha);
       }
       else if (zt_z2 == 0 and zt_z1 == 1 and zt_y1 == 0 and zt_y2 == 0) {

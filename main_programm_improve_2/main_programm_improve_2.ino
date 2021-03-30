@@ -1,4 +1,4 @@
-#include <QTRSensors.h>//初始化QTR库
+#include <QTRSensors.h>
 QTRSensors qtr;
 const uint8_t SensorCount = 4;
 uint16_t sensorValues[SensorCount];
@@ -7,10 +7,10 @@ uint16_t sensorValues[SensorCount];
 //定义：右电机代号1，左电机代号2
 int Y = 1;
 int Z = 2;
-int t = 1900; //制动时间(ms)
-int max_speed = 60; //最大速度
-int yz_IR = 2000; //红外感光器阈值
-int jiancha = 50; //系统自检时间
+int t = 25; //制动时间(ms)
+int max_speed = 70; //最大速度
+int yz_IR = 800; //红外感光器阈值
+int jiancha = 25; //系统自检时间
 float d = max_speed / (t / jiancha); //每次速度变化幅度
 float yz_gm = 50; //光敏电阻触发阈值（电压）
 int pin_gm = A0; //光敏接口针脚
@@ -21,6 +21,8 @@ int zt_z1 = 0;
 int zt_y1 = 0;
 int zt_y2 = 0;
 int w_r_speed;
+int qibu_t = 10;
+int qibu_v = 254;
 //自定义函数
 int zt_change(float v_gm, float yz_gm, int zt) {
   if (v_gm >= yz_gm) { //没有额外照明（电阻大，电压高）
@@ -34,12 +36,44 @@ int zt_change(float v_gm, float yz_gm, int zt) {
     }
   }
 }
+
 void setup() {
+  // configure the sensors
   qtr.setTypeRC();
-  qtr.setSensorPins((const uint8_t[]) {
-    8, 9, 10, 11
-  }, SensorCount);
+  qtr.setSensorPins((const uint8_t[]){8, 9, 10,11}, SensorCount);
+  //qtr.setEmitterPin(2);
+
+  delay(500);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH); // turn on Arduino's LED to indicate we are in calibration mode
+
+  // 2.5 ms RC read timeout (default) * 10 reads per calibrate() call
+  // = ~25 ms per calibrate() call.
+  // Call calibrate() 400 times to make calibration take about 10 seconds.
+  for (uint16_t i = 0; i < 400; i++)
+  {
+    qtr.calibrate();
+  }
+  digitalWrite(LED_BUILTIN, LOW); // turn off Arduino's LED to indicate we are through with calibration
+
+  // print the calibration minimum values measured when emitters were on
   Serial.begin(9600);
+  for (uint8_t i = 0; i < SensorCount; i++)
+  {
+    Serial.print(qtr.calibrationOn.minimum[i]);
+    Serial.print(' ');
+  }
+  Serial.println();
+
+  // print the calibration maximum values measured when emitters were on
+  for (uint8_t i = 0; i < SensorCount; i++)
+  {
+    Serial.print(qtr.calibrationOn.maximum[i]);
+    Serial.print(' ');
+  }
+  Serial.println();
+  Serial.println();
+  delay(1000);
   //左轮针脚
   pinMode(6, OUTPUT);//方向
   pinMode(7, OUTPUT);//转速
@@ -52,27 +86,28 @@ void setup() {
 }
 
 void loop() {
-  float gm = analogRead(pin_gm); //读取光敏针脚
-  Serial.print(gm);
-  Serial.print('\t');
-  Serial.println();
-  if (gm >= yz_gm) { //没有额外照明（电阻大，电压高）
-    zt = zt;
-  }
-  else if (gm<yz_gm and ini_gm>yz_gm) { //有额外照明(gm<yz_gm)（电阻小，电压低）
-    if (zt = 0) {
-      return 1;
-    } else {
-      return 0;
-    }
-  }
-  ini_gm = gm;
+  //  float gm = analogRead(pin_gm); //读取光敏针脚
+  //  Serial.print(gm);
+  //  Serial.print('\t');
+  //  Serial.println();
+  //  if (gm >= yz_gm) { //没有额外照明（电阻大，电压高）
+  //    zt = zt;
+  //  }
+  //  else if (gm<yz_gm and ini_gm>yz_gm) { //有额外照明(gm<yz_gm)（电阻小，电压低）
+  //    if (zt = 0) {
+  //      return 1;
+  //    } else {
+  //      return 0;
+  //    }
+  //  }
+  //  ini_gm = gm;
+  zt = 1;
   switch (zt) {
     case (0): //不动
-      delay(t);
+      delay(jiancha);
       break;
     case 1://动
-      qtr.read(sensorValues);
+      uint16_t position = qtr.readLineBlack(sensorValues);
       for (uint8_t i = 0; i < SensorCount; i++)
       {
         Serial.print(sensorValues[i]);
@@ -111,10 +146,18 @@ void loop() {
       //检测传感器状态,左2（），左1（），右1（），右2（）
       if (zt_z2 == 0 and zt_z1 == 0 and zt_y1 == 0 and zt_y2 == 0) {
         //左2（0），左1（0），右1（0），右2（0）→前进
+        //        digitalWrite(4, LOW);
+        //        analogWrite(5, qibu_v);
+        //        analogWrite(6, qibu_v);
+        //        digitalWrite(7, HIGH);
+        //        delay(qibu_t);
         digitalWrite(4, LOW);
         analogWrite(5, max_speed);
         analogWrite(6, max_speed);
         digitalWrite(7, HIGH);
+        Serial.print("前进");
+        Serial.print('\t');
+        Serial.println();
         delay(jiancha);
       }
       else if (zt_z2 == 0 and zt_z1 == 1 and zt_y1 == 0 and zt_y2 == 0) {
@@ -124,7 +167,7 @@ void loop() {
         digitalWrite(7, HIGH);
         float r_speed = max_speed;
         while (zt_z2 == 0 and zt_z1 == 1 and zt_y1 == 0 and zt_y2 == 0 and r_speed >= 0) {
-          qtr.read(sensorValues);
+          uint16_t position = qtr.readLineBlack(sensorValues);
           if (sensorValues[0] >= yz_IR) {
             zt_z2 = 1;
           } else {
@@ -152,7 +195,7 @@ void loop() {
         }
         if (r_speed < 0) {
           while (zt_z2 == 0 and zt_z1 == 1 and zt_y1 == 0 and zt_y2 == 0) {
-            qtr.read(sensorValues);
+            uint16_t position = qtr.readLineBlack(sensorValues);
             if (sensorValues[0] >= yz_IR) {
               zt_z2 = 1;
             } else {
@@ -185,7 +228,7 @@ void loop() {
         digitalWrite(7, LOW);
         float r_speed = 0;
         while (zt_z2 == 1 and zt_z1 == 1 and zt_y1 == 0 and zt_y2 == 0 and r_speed <= max_speed) {
-          qtr.read(sensorValues);
+          uint16_t position = qtr.readLineBlack(sensorValues);
           if (sensorValues[0] >= yz_IR) {
             zt_z2 = 1;
           } else {
@@ -213,7 +256,7 @@ void loop() {
         }
         if (r_speed > max_speed) {
           while (zt_z2 == 1 and zt_z1 == 1 and zt_y1 == 0 and zt_y2 == 0) {
-            qtr.read(sensorValues);
+            uint16_t position = qtr.readLineBlack(sensorValues);
             if (sensorValues[0] >= yz_IR) {
               zt_z2 = 1;
             } else {
@@ -246,7 +289,7 @@ void loop() {
         digitalWrite(4, LOW);
         float r_speed = max_speed;
         while (zt_z2 == 0 and zt_z1 == 0 and zt_y1 == 1 and zt_y2 == 0 and r_speed >= 0) {
-          qtr.read(sensorValues);
+          uint16_t position = qtr.readLineBlack(sensorValues);
           if (sensorValues[0] >= yz_IR) {
             zt_z2 = 1;
           } else {
@@ -274,7 +317,7 @@ void loop() {
         }
         if (r_speed < 0) {
           while (zt_z2 == 0 and zt_z1 == 0 and zt_y1 == 1 and zt_y2 == 0) {
-            qtr.read(sensorValues);
+            uint16_t position = qtr.readLineBlack(sensorValues);
             if (sensorValues[0] >= yz_IR) {
               zt_z2 = 1;
             } else {
@@ -307,7 +350,7 @@ void loop() {
         digitalWrite(4, HIGH);
         float r_speed = 0;
         while (zt_z2 == 0 and zt_z1 == 0 and zt_y1 == 1 and zt_y2 == 1 and r_speed <= max_speed) {
-          qtr.read(sensorValues);
+          uint16_t position = qtr.readLineBlack(sensorValues);
           if (sensorValues[0] >= yz_IR) {
             zt_z2 = 1;
           } else {
@@ -335,7 +378,7 @@ void loop() {
         }
         if (r_speed > max_speed) {
           while (zt_z2 == 0 and zt_z1 == 0 and zt_y1 == 1 and zt_y2 == 1) {
-            qtr.read(sensorValues);
+            uint16_t position = qtr.readLineBlack(sensorValues);
             if (sensorValues[0] >= yz_IR) {
               zt_z2 = 1;
             } else {
@@ -362,8 +405,8 @@ void loop() {
         }
       } else {
         digitalWrite(4, LOW);
-        analogWrite(5, max_speed);
-        analogWrite(6, max_speed);
+        analogWrite(5, 1);
+        analogWrite(6, 1);
         digitalWrite(7, HIGH);
         delay(jiancha);
       }
